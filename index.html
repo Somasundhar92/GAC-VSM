@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css"
+    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Gulf Asia Visitor-Security Entry-Exit System</title>
+    <style>
+      .timestamp-display {
+        margin-top: 5px;
+        font-size: 0.9em;
+        color: #666;
+      }
+      #scanner-container {
+        margin-bottom: 20px;
+      }
+      #qr-reader {
+        width: 100%;
+        margin: 0 auto;
+      }
+      #qr-reader__dashboard_section_csr {
+        padding: 10px;
+      }
+      #qr-reader__dashboard_section {
+        padding: 10px;
+      }
+      #scanned-result {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f5f5f5;
+        border-radius: 4px;
+        display: none;
+      }
+      #scan-again-btn {
+        margin-top: 10px;
+        display: none;
+      }
+      .container {
+        padding: 10px;
+      }
+      .hero.is-primary .title {
+        font-size: 1.5rem;
+      }
+      .field {
+        margin-bottom: 1.2rem;
+      }
+      .button {
+        font-size: 1rem;
+      }
+      @media (max-width: 768px) {
+        #qr-reader {
+          width: 100%;
+          max-width: 400px;
+        }
+        .hero.is-primary .title {
+          font-size: 1.3rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <section class="hero is-primary is-bold">
+      <div class="hero-body">
+        <div class="container">
+          <h1 class="title">Gulf Asia Visitor-Security Entry-Exit System</h1>
+        </div>
+      </div>
+    </section>
+    
+    <div class="container m-4 pl-4" id="scanner-container">
+      <div class="field">
+        <label class="label">QR Code Scanner</label>
+        <div class="control">
+          <button type="button" id="startScanner" class="button is-info is-fullwidth">
+            <span class="icon">
+              <i class="fas fa-qrcode"></i>
+            </span>
+            <span>Start QR Scanner</span>
+          </button>
+          <div id="qr-reader" style="display: none;"></div>
+          <div id="scanned-result"></div>
+          <button type="button" id="scan-again-btn" class="button is-info is-outlined is-fullwidth">
+            <span class="icon">
+              <i class="fas fa-sync-alt"></i>
+            </span>
+            <span>Scan Again</span>
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <form id="form" class="container m-4 pl-4">
+      <div class="field">
+        <label class="label">Unique Number</label>
+        <div class="control">
+          <input
+            class="input"
+            type="text"
+            placeholder="Your Unique Number"
+            name="Unique Number"
+            id="uniqueNumber"
+            required
+          />
+        </div>
+      </div>
+      
+      <div class="field">
+        <label class="label">Entry Time</label>
+        <div class="control">
+          <button type="button" id="entryButton" class="button is-success is-fullwidth">
+            <span class="icon">
+              <i class="fas fa-sign-in-alt"></i>
+            </span>
+            <span>Record Entry</span>
+          </button>
+          <input type="hidden" name="Entry Time" id="entryTime">
+          <div id="entryDisplay" class="timestamp-display"></div>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label class="label">Exit Time</label>
+        <div class="control">
+          <button type="button" id="exitButton" class="button is-danger is-fullwidth">
+            <span class="icon">
+              <i class="fas fa-sign-out-alt"></i>
+            </span>
+            <span>Record Exit</span>
+          </button>
+          <input type="hidden" name="Exit Time" id="exitTime">
+          <div id="exitDisplay" class="timestamp-display"></div>
+        </div>
+      </div>
+
+      <div class="field is-grouped">
+        <div class="control">
+          <button class="button is-primary" type="submit" id="submit-button">
+            Submit Record
+          </button>
+        </div>
+        <div class="control">
+          <button
+            class="button is-danger"
+            type="button"
+            id="cancelButton"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </form>
+    
+    <div
+      id="message"
+      style="
+        display: none;
+        margin: 20px;
+        padding: 10px;
+        border-radius: 4px;
+        font-weight: bold;
+      "
+    ></div>
+
+    <!-- Include the QR scanner library -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.4/html5-qrcode.min.js"></script>
+    
+    <script>
+      const form = document.getElementById("form");
+      const submitButton = document.getElementById("submit-button");
+      const messageDiv = document.getElementById("message");
+      const entryButton = document.getElementById("entryButton");
+      const exitButton = document.getElementById("exitButton");
+      const entryTimeField = document.getElementById("entryTime");
+      const exitTimeField = document.getElementById("exitTime");
+      const entryDisplay = document.getElementById("entryDisplay");
+      const exitDisplay = document.getElementById("exitDisplay");
+      const cancelButton = document.getElementById("cancelButton");
+      const startScannerBtn = document.getElementById("startScanner");
+      const qrReaderDiv = document.getElementById("qr-reader");
+      const scannedResultDiv = document.getElementById("scanned-result");
+      const scanAgainBtn = document.getElementById("scan-again-btn");
+      const uniqueNumberInput = document.getElementById("uniqueNumber");
+      
+      let html5QrCode;
+
+      // Function to format date in Arabian Standard Time (AST/Qatar time) for display
+      function formatASTDateForDisplay(date) {
+        const options = {
+          timeZone: 'Asia/Qatar',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        };
+        return date.toLocaleString('en-US', options).replace(',', '');
+      }
+
+      // Function to format date in Arabian Standard Time (AST/Qatar time) for storage
+      function formatASTDateForStorage(date) {
+        // Convert to Qatar time string in ISO-like format (YYYY-MM-DD HH:MM:SS)
+        const qatarDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Qatar' }));
+        
+        const pad = num => num.toString().padStart(2, '0');
+        
+        const year = qatarDate.getFullYear();
+        const month = pad(qatarDate.getMonth() + 1);
+        const day = pad(qatarDate.getDate());
+        const hours = pad(qatarDate.getHours());
+        const minutes = pad(qatarDate.getMinutes());
+        const seconds = pad(qatarDate.getSeconds());
+        
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+      }
+
+      // Initialize QR Scanner
+      startScannerBtn.addEventListener("click", function() {
+        startScannerBtn.style.display = "none";
+        qrReaderDiv.style.display = "block";
+        
+        html5QrCode = new Html5Qrcode("qr-reader");
+        const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+          // Stop scanning once we get a result
+          html5QrCode.stop().then((ignore) => {
+            // QR Code scanning is stopped.
+            qrReaderDiv.style.display = "none";
+            scannedResultDiv.style.display = "block";
+            scanAgainBtn.style.display = "block";
+            
+            // Display the scanned result
+            scannedResultDiv.innerHTML = `
+              <strong>Scanned Result:</strong> ${decodedText}
+            `;
+            
+            // Auto-fill the unique number field if the scanned data looks appropriate
+            if (decodedText && decodedText.trim().length > 0) {
+              uniqueNumberInput.value = decodedText.trim();
+              showMessage("QR code scanned successfully!", "success");
+            }
+          }).catch((err) => {
+            console.error("Error stopping scanner:", err);
+          });
+        };
+        
+        // Larger scanning area for mobile devices
+        const config = { fps: 10, qrbox: {width: 300, height: 300} };
+        
+        // Start scanning
+        html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          qrCodeSuccessCallback
+        ).catch((err) => {
+          console.error("Error starting scanner:", err);
+          showMessage("Error starting QR scanner: " + err, "danger");
+          resetScannerUI();
+        });
+      });
+      
+      // Scan again button
+      scanAgainBtn.addEventListener("click", function() {
+        resetScannerUI();
+        startScannerBtn.click();
+      });
+      
+      // Reset scanner UI
+      function resetScannerUI() {
+        startScannerBtn.style.display = "block";
+        qrReaderDiv.style.display = "none";
+        scannedResultDiv.style.display = "none";
+        scanAgainBtn.style.display = "none";
+      }
+
+      // Handle entry button click
+      entryButton.addEventListener("click", function() {
+        const now = new Date();
+        const displayTime = formatASTDateForDisplay(now);
+        const storageTime = formatASTDateForStorage(now);
+        
+        entryTimeField.value = storageTime;
+        entryDisplay.textContent = `Entry: ${displayTime}`;
+        entryButton.classList.add("is-light");
+        
+        showMessage(`Entry recorded at ${displayTime}`, "success");
+      });
+
+      // Handle exit button click
+      exitButton.addEventListener("click", function() {
+        const now = new Date();
+        const displayTime = formatASTDateForDisplay(now);
+        const storageTime = formatASTDateForStorage(now);
+        
+        exitTimeField.value = storageTime;
+        exitDisplay.textContent = `Exit: ${displayTime}`;
+        exitButton.classList.add("is-light");
+        
+        showMessage(`Exit recorded at ${displayTime}`, "danger");
+      });
+
+      // Show message with status
+      function showMessage(text, type) {
+        messageDiv.textContent = text;
+        messageDiv.style.display = "block";
+        messageDiv.style.backgroundColor = type === "success" ? "#48c78e" : "#f14668";
+        messageDiv.style.color = "white";
+        setTimeout(() => messageDiv.style.display = "none", 3000);
+      }
+
+      // Function to reset timestamps
+      function resetTimestamps() {
+        entryTimeField.value = "";
+        exitTimeField.value = "";
+        entryDisplay.textContent = "";
+        exitDisplay.textContent = "";
+        entryButton.classList.remove("is-light");
+        exitButton.classList.remove("is-light");
+      }
+
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        // Validate that at least one timestamp is recorded
+        if (!entryTimeField.value && !exitTimeField.value) {
+          showMessage("Please record at least entry or exit time", "danger");
+          return;
+        }
+
+        submitButton.disabled = true;
+        submitButton.classList.add("is-loading");
+        showMessage("Submitting...", "info");
+
+        try {
+          const formData = new FormData(this);
+          const formDataObj = {};
+
+          // Convert FormData to object
+          for (let [key, value] of formData.entries()) {
+            formDataObj[key] = value;
+          }
+
+          // Submit form data
+          const scriptURL =
+            "https://script.google.com/macros/s/AKfycbzP_rxsSwV66T3TQl_JZ_jKV6CL1I6QCW0IhX6NQEq-4YgiQkLnO_VAZ9doUOQM-ElIwA/exec";
+
+          const response = await fetch(scriptURL, {
+            redirect: "follow",
+            method: "POST",
+            body: JSON.stringify(formDataObj),
+            headers: {
+              "Content-Type": "text/plain;charset=utf-8",
+            },
+          });
+
+          const data = await response.json();
+
+          if (data.status === "success") {
+            showMessage("Data submitted successfully!", "success");
+            form.reset();
+            resetTimestamps();
+            resetScannerUI();
+          } else {
+            throw new Error(data.message || "Submission failed");
+          }
+        } catch (error) {
+          console.error("Error:", error);
+          showMessage("Error: " + error.message, "danger");
+        } finally {
+          submitButton.disabled = false;
+          submitButton.classList.remove("is-loading");
+        }
+      });
+
+      // Reset form
+      cancelButton.addEventListener("click", function () {
+        form.reset();
+        resetTimestamps();
+        resetScannerUI();
+        messageDiv.style.display = "none";
+      });
+    </script>
+  </body>
+</html>
